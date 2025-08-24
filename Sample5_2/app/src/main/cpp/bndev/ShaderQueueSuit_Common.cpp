@@ -8,7 +8,7 @@
 //创建一致变量缓冲
 void ShaderQueueSuit_Common::create_uniform_buffer(VkDevice &device,
                                                    VkPhysicalDeviceMemoryProperties &memoryroperties) {
-    bufferByteCount = sizeof(float) * 12;//一致变量缓冲的总字节数
+    bufferByteCount = sizeof(float) * 20;//一致变量缓冲的总字节数
 
     VkBufferCreateInfo buf_info = {};//构建一致变量缓冲创建信息结构体实例
     buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;    //结构体的类型

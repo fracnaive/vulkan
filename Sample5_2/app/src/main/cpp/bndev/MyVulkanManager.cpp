@@ -783,16 +783,21 @@ void MyVulkanManager::initMatrixAndLight() {
     LightManager::setLightAmbient(0.2f, 0.2f, 0.2f, 0.2f); // 设置环境光强度
     LightManager::setLightPosition(0, 0, -13);
     LightManager::setLightDiffuse(0.8f, 0.8f, 0.8f, 0.8f);
+    LightManager::setLightSpecular(0.7f, 0.7f, 0.7f, 0.7f);
 }
 
 void MyVulkanManager::flushUniformBuffer()//将当前帧相关数据送入一致变量缓冲
 {
-    float vertexUniformData[12]={
+    float vertexUniformData[20]={
             LightManager::lightAmbientR,LightManager::lightAmbientG,
             LightManager::lightAmbientB,LightManager::lightAmbientA,//环境光强度RGBA分量值
             LightManager::lx, LightManager::ly, LightManager::lz, 1.0,
             LightManager::lightDiffuseR, LightManager::lightDiffuseG,
-            LightManager::lightDiffuseB, LightManager::lightDiffuseA
+            LightManager::lightDiffuseB, LightManager::lightDiffuseA,
+            MatrixState3D::cx, MatrixState3D::cy,
+            MatrixState3D::cz, 1.0f,
+            LightManager::lightSpecularR, LightManager::lightSpecularG,
+            LightManager::lightSpecularB, LightManager::lightSpecularA
     };
     uint8_t *pData;//CPU访问时的辅助指针
     VkResult result = vkMapMemory(device, sqsCL->memUniformBuf, 0, sqsCL->bufferByteCount, 0,

@@ -5,6 +5,8 @@ layout (std140, set = 0, binding = 0) uniform bufferVals {
     vec4 lightAmbient;
     vec4 lightPosition;
     vec4 lightDiffuse;
+    vec4 uCamera;
+    vec4 lightSpecular;
 } myBufferVals;
 layout (push_constant) uniform constantVals {
 	mat4 mvp;//最终变换矩阵
@@ -19,28 +21,42 @@ out gl_PerVertex {//输出接口块
 };
 vec4 pointLight (
     in mat4 uMMatrix,
+    in vec3 uCamera,
     in vec3 lightLocation,
+    in vec4 lightAmbient,
     in vec4 lightDiffuse,
+    in vec4 lightSpecular,
     in vec3 normal,
     in vec3 aPosition) {
+    vec4 ambient;
     vec4 diffuse;
+    vec4 specular;
+    ambient = lightAmbient;
     vec3 normalTarget = aPosition + normal;
     vec3 newNormal = (uMMatrix * vec4(normalTarget, 1.)).xyz - (uMMatrix * vec4(aPosition, 1.0)).xyz;
     newNormal = normalize(newNormal);
+    vec3 eye = normalize(uCamera - (uMMatrix * vec4(aPosition, 1.0f)).xyz);
     vec3 vp = normalize(lightLocation - (uMMatrix * vec4(aPosition, 1.0f)).xyz);
     vp = normalize(vp);
+    vec3 halfVector = normalize(vp + eye);
+    float shininess = 50.0;
     float nDotViewPosition = max(0.0, dot(newNormal, vp));
     diffuse = lightDiffuse * nDotViewPosition;
-    return diffuse;
+    float nDotViewHalfVector = dot(newNormal, halfVector);
+    float powerFactor = max(0.0, pow(nDotViewHalfVector, shininess));
+    specular = lightSpecular * powerFactor;
+    return ambient + diffuse + specular;
 }
 
 void main() {//主函数
     gl_Position = myConstantVals.mvp * vec4(pos, 1.0);//计算顶点最终位置
-    outLightQD = myBufferVals.lightAmbient;
-    outLightQD += pointLight(
+    outLightQD = pointLight(
         myConstantVals.mm,
+        myBufferVals.uCamera.xyz,
         myBufferVals.lightPosition.xyz,
+        myBufferVals.lightAmbient,
         myBufferVals.lightDiffuse,
+        myBufferVals.lightSpecular,
         inNormal,
         pos);
     vposition = pos;//把顶点位置传给片元着色器

@@ -14,6 +14,10 @@ float LightManager::lightDiffuseR = 0;
 float LightManager::lightDiffuseG = 0;
 float LightManager::lightDiffuseB = 0;
 float LightManager::lightDiffuseA = 0;
+float LightManager::lightSpecularR = 0;
+float LightManager::lightSpecularG = 0;
+float LightManager::lightSpecularB = 0;
+float LightManager::lightSpecularA = 0;
 
 void LightManager::setLightAmbient(float lightAmbientRIn, float lightAmbientGIn, float lightAmbientBIn,
                               float lightAmbientAIn) {
@@ -36,5 +40,14 @@ void LightManager::setLightDiffuse(float lightDiffuseRIn, float lightDiffuseGIn,
     lightDiffuseB = lightDiffuseBIn;
     lightDiffuseA = lightDiffuseAIn;
 }
+
+void LightManager::setLightSpecular(float lightSpecularRIn, float lightSpecularGIn,
+                                   float lightSpecularBIn, float lightSpecularAIn) {
+    lightSpecularR = lightSpecularRIn;
+    lightSpecularG = lightSpecularGIn;
+    lightSpecularB = lightSpecularBIn;
+    lightSpecularA = lightSpecularAIn;
+}
+
 
 
