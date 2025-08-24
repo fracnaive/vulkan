@@ -62,6 +62,7 @@ public:
     static DrawableObjectCommonLight* ballForDraw;
     static float xAngle;//三角形旋转角度
     static float yAngle;//三角形旋转角度
+    static float zAngle;//三角形旋转角度
     static void init_vulkan_instance();//创建Vulkan实例
     static void enumerate_vulkan_phy_devices();//初始化物理设备
     static void create_vulkan_devices();//创建逻辑设备

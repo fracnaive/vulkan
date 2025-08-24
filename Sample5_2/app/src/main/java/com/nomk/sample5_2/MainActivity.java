@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.res.AssetManager;
 import android.os.Bundle;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.widget.TextView;
@@ -47,6 +48,17 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     public native void initVulkan(Object surface);
 
     public native void setAssetManager(AssetManager assetManager);
+
+    public native boolean handleInputEvent(int action, int x, int y, int pointerCount);
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        int action = event.getAction();
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+        int pointerCount = event.getPointerCount();
+        return handleInputEvent(action, x, y, pointerCount);
+    }
 
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int i, int i1, int i2) {

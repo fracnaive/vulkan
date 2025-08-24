@@ -8,7 +8,7 @@
 //创建一致变量缓冲
 void ShaderQueueSuit_Common::create_uniform_buffer(VkDevice &device,
                                                    VkPhysicalDeviceMemoryProperties &memoryroperties) {
-    bufferByteCount = sizeof(float) * 4;//一致变量缓冲的总字节数
+    bufferByteCount = sizeof(float) * 12;//一致变量缓冲的总字节数
 
     VkBufferCreateInfo buf_info = {};//构建一致变量缓冲创建信息结构体实例
     buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;    //结构体的类型
@@ -209,12 +209,17 @@ void ShaderQueueSuit_Common::destroy_shader(VkDevice &device)//销毁着色器�
 void ShaderQueueSuit_Common::initVertexAttributeInfo() {
     vertexBinding.binding = 0;//对应绑定点
     vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;    //数据输入频率为每顶点
-    vertexBinding.stride = sizeof(float) * 3;//每组数据的跨度字节数
+    vertexBinding.stride = sizeof(float) * 6;//每组数据的跨度字节数
 
     vertexAttribs[0].binding = 0;//第1个顶点输入属性的绑定点
     vertexAttribs[0].location = 0;//第1个顶点输入属性的位置索引
     vertexAttribs[0].format = VK_FORMAT_R32G32B32_SFLOAT;//第1个顶点输入属性的数据格式
     vertexAttribs[0].offset = 0;//第1个顶点输入属性的偏移量
+
+    vertexAttribs[1].binding = 0;//法向量输入属性的绑定点
+    vertexAttribs[1].location = 1;//法向量输入属性的位置索引
+    vertexAttribs[1].format = VK_FORMAT_R32G32B32_SFLOAT;//法向量输入属性的数据格式
+    vertexAttribs[1].offset = 12;//法向量输入属性的偏移量
 }
 
 void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &renderPass) {
@@ -233,7 +238,7 @@ void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &re
     vi.flags = 0;//供将来使用的标志
     vi.vertexBindingDescriptionCount = 1;//顶点输入绑定描述数量
     vi.pVertexBindingDescriptions = &vertexBinding;//顶点输入绑定描述列表
-    vi.vertexAttributeDescriptionCount = 1;//顶点输入属性数量
+    vi.vertexAttributeDescriptionCount = 2;//顶点输入属性数量
     vi.pVertexAttributeDescriptions = vertexAttribs;//顶点输入属性描述列表
 
     VkPipelineInputAssemblyStateCreateInfo ia;//管线图元组装状态创建信息

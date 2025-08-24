@@ -62,6 +62,7 @@ ShaderQueueSuit_Common *MyVulkanManager::sqsCL;
 DrawableObjectCommonLight*  MyVulkanManager::ballForDraw;
 float MyVulkanManager::xAngle = 0;
 float MyVulkanManager::yAngle = 0;
+float MyVulkanManager::zAngle = 0;
 
 // 新增：存储窗口指针（通过外部传入）
 static ANativeWindow *sWindow = nullptr;
@@ -780,14 +781,18 @@ void MyVulkanManager::initMatrixAndLight() {
     float ratio = (float) screenWidth / (float) screenHeight;//求屏幕长宽比
     MatrixState3D::setProjectFrustum(-ratio, ratio, -1, 1, 20.0f, 1000);//设置投影参数
     LightManager::setLightAmbient(0.2f, 0.2f, 0.2f, 0.2f); // 设置环境光强度
-
+    LightManager::setLightPosition(0, 0, -13);
+    LightManager::setLightDiffuse(0.8f, 0.8f, 0.8f, 0.8f);
 }
 
 void MyVulkanManager::flushUniformBuffer()//将当前帧相关数据送入一致变量缓冲
 {
-    float vertexUniformData[4]={
+    float vertexUniformData[12]={
             LightManager::lightAmbientR,LightManager::lightAmbientG,
             LightManager::lightAmbientB,LightManager::lightAmbientA,//环境光强度RGBA分量值
+            LightManager::lx, LightManager::ly, LightManager::lz, 1.0,
+            LightManager::lightDiffuseR, LightManager::lightDiffuseG,
+            LightManager::lightDiffuseB, LightManager::lightDiffuseA
     };
     uint8_t *pData;//CPU访问时的辅助指针
     VkResult result = vkMapMemory(device, sqsCL->memUniformBuf, 0, sqsCL->bufferByteCount, 0,

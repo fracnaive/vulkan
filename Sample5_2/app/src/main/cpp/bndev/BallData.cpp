@@ -53,12 +53,16 @@ void BallData::genBallData(float angleSpan) {//生成球面上各个小三角形
         }
     }
     vCount = alVertix.size() / 3;//顶点的数量为坐标值数量的1/3，因为一个顶点有3个坐标分量
-    dataByteCount = alVertix.size() * sizeof(float);//计算顶点数据总字节数
-    vdata = new float[alVertix.size()];//创建存放顶点数据的数组
+    dataByteCount = alVertix.size() * 2 * sizeof(float);//计算顶点数据总字节数
+    vdata = new float[alVertix.size() * 2];//创建存放顶点数据的数组
     int index = 0;//辅助数组索引
     for (int i = 0; i < vCount; i++) {//将顶点数据存储到数组中
         vdata[index++] = alVertix[i * 3 + 0];//保存顶点位置X分量
         vdata[index++] = alVertix[i * 3 + 1];//保存顶点位置Y分量
         vdata[index++] = alVertix[i * 3 + 2];//保存顶点位置Z分量
+
+        vdata[index++]=alVertix[i*3+0]/r;//保存法向量X轴分量（除以r是为了规格化）
+        vdata[index++]=alVertix[i*3+1]/r;//保存法向量Y轴分量（除以r是为了规格化）
+        vdata[index++]=alVertix[i*3+2]/r;//保存法向量Z轴分量（除以r是为了规格化）
     }
 }
