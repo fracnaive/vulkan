@@ -1,11 +1,8 @@
 #version 400
 #extension GL_ARB_separate_shader_objects : enable//开启separate_shader_objects
 #extension GL_ARB_shading_language_420pack : enable//开启shading_language_420pack
-layout (std140,set = 0, binding = 0) uniform bufferVals {//一致块
-    vec4 colorA;//输入的颜色A
-	vec4 colorB;//输入的颜色B
-} myBufferVals;
-layout (location = 0) in vec3 vposition;//顶点着色器传入的顶点位置
+layout (location = 0) in vec4 inLightQD;//顶点着色器传入的光照强度
+layout (location = 1) in vec3 vposition;//顶点着色器传入的顶点位置
 layout (location = 0) out vec4 outColor;//输出到渲染管线的片元颜色值
 vec4 genBoardColor(vec3 position){	//棋盘纹理着色器实现方法
    const float R=1.0;//球的半径
@@ -17,12 +14,12 @@ vec4 genBoardColor(vec3 position){	//棋盘纹理着色器实现方法
    int k = int((position.z + 1.0)/span);//当前片元位置小方块的列数
    int whichColor = int(mod(float(i+j+k),2.0));//计算行数、层数、列数的和并对2取模
    if(whichColor == 1){	//奇数时为颜色A
-   		color = myBufferVals.colorA;
+   		color = vec4(0.678,0.231,0.129,1.0);//红色
    }else{//偶数时为颜色B
-   		color = myBufferVals.colorB;
+   		color = vec4(1.0,1.0,1.0,1.0);//白色
    }
    return color;//返回结果颜色
 }
 void main(){//主方法
-   outColor=genBoardColor(vposition);//将计算出的颜色传递给渲染管线
+   outColor = inLightQD * genBoardColor(vposition);//将计算出的颜色传递给渲染管线
 }

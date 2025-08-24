@@ -8,7 +8,7 @@
 //创建一致变量缓冲
 void ShaderQueueSuit_Common::create_uniform_buffer(VkDevice &device,
                                                    VkPhysicalDeviceMemoryProperties &memoryroperties) {
-    bufferByteCount = sizeof(float) * 8;//一致变量缓冲的总字节数
+    bufferByteCount = sizeof(float) * 4;//一致变量缓冲的总字节数
 
     VkBufferCreateInfo buf_info = {};//构建一致变量缓冲创建信息结构体实例
     buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;    //结构体的类型
@@ -65,7 +65,7 @@ void ShaderQueueSuit_Common::create_pipeline_layout(VkDevice &device) {
     layout_bindings[0].binding = 0;//此绑定的绑定点编号
     layout_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;//描述类型
     layout_bindings[0].descriptorCount = 1;//描述数量
-    layout_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;    //目标着色器阶段
+    layout_bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;    //目标着色器阶段
     layout_bindings[0].pImmutableSamplers = nullptr;
 
     VkDescriptorSetLayoutCreateInfo descriptor_layout = {};    //构建描述集布局创建信息结构体实例
@@ -83,7 +83,7 @@ void ShaderQueueSuit_Common::create_pipeline_layout(VkDevice &device) {
     VkPushConstantRange push_constant_ranges[push_constant_range_count] = {};
     push_constant_ranges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     push_constant_ranges[0].offset = 0;
-    push_constant_ranges[0].size = sizeof(float)*16;
+    push_constant_ranges[0].size = sizeof(float) * 32;
 
     VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};//构建管线布局创建信息结构体实例
     pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;    //结构体类型

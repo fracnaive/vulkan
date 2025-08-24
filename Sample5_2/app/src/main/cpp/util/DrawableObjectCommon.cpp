@@ -113,9 +113,11 @@ void DrawableObjectCommonLight::drawSelf(
             offsetsVertex        //各个顶点数据缓冲的内部偏移量
     );
     float* mvp = MatrixState3D::getFinalMatrix();					//获取总变换矩阵
-//    memcpy(pushConstantData, mvp, sizeof(float) * 16);				//将总变换矩阵拷贝入内存
+    float* mm = MatrixState3D::getMMatrix();
+    memcpy(pushConstantData, mvp, sizeof(float) * 16);				//将总变换矩阵拷贝入内存
+    memcpy(pushConstantData + 16, mm, sizeof(float) * 16);
     vkCmdPushConstants(cmd, pipelineLayout, 				//将常量数据送入管线
-                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 16, mvp);
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 32, pushConstantData);
     // 顶点法绘制
     vkCmdDraw(cmd, vCount, 1, 0, 0);//执行绘制
 }

@@ -77,7 +77,7 @@ public:
     static void initPipeline();//初始化管线
     static void createFence();//创建栅栏
     static void initPresentInfo();//初始化显示信息
-    static void initMatrix();//初始化矩阵
+    static void initMatrixAndLight();//初始化矩阵和光照
     static void flushUniformBuffer();//将一致变量数据送入缓冲
     static void flushTexToDesSet();//将纹理等数据与描述集关联
     static void destroyFence();//销毁栅栏

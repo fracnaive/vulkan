@@ -10,6 +10,7 @@
 #include "../util/FPSUtil.h"
 #include "SpirvLoader.h"
 #include "BallData.h"
+#include "LightManager.h"
 #include <sys/time.h>
 #include <android/native_window.h>  // 保留android_app，但保留ANativeWindow相关
 
@@ -773,23 +774,27 @@ void MyVulkanManager::initPresentInfo() {
     present.pResults = nullptr;//呈现操作结果标志列表
 }
 
-void MyVulkanManager::initMatrix() {
-    MatrixState3D::setCamera(0, 0, 3, 0, 0, 0, 0, 1.0, 0.0);//初始化摄像机
+void MyVulkanManager::initMatrixAndLight() {
+    MatrixState3D::setCamera(0, 0, 30, 0, 0, 0, 0, 1.0, 0.0);//初始化摄像机
     MatrixState3D::setInitStack();//初始化基本变换矩阵
     float ratio = (float) screenWidth / (float) screenHeight;//求屏幕长宽比
-    MatrixState3D::setProjectFrustum(-ratio, ratio, -1, 1, 1.5f, 1000);//设置投影参数
+    MatrixState3D::setProjectFrustum(-ratio, ratio, -1, 1, 20.0f, 1000);//设置投影参数
+    LightManager::setLightAmbient(0.2f, 0.2f, 0.2f, 0.2f); // 设置环境光强度
+
 }
 
 void MyVulkanManager::flushUniformBuffer()//将当前帧相关数据送入一致变量缓冲
 {
-    float* vertexUniformData = MatrixState3D::getFinalMatrix();
+    float vertexUniformData[4]={
+            LightManager::lightAmbientR,LightManager::lightAmbientG,
+            LightManager::lightAmbientB,LightManager::lightAmbientA,//环境光强度RGBA分量值
+    };
     uint8_t *pData;//CPU访问时的辅助指针
     VkResult result = vkMapMemory(device, sqsCL->memUniformBuf, 0, sqsCL->bufferByteCount, 0,
                                   (void **) &pData);//将设备内存映射为CPU可访问
     assert(result == VK_SUCCESS);
     memcpy(pData, vertexUniformData, sqsCL->bufferByteCount);//将最终矩阵数据拷贝进显存
     vkUnmapMemory(device, sqsCL->memUniformBuf);    //解除内存映射
-
 }
 
 void MyVulkanManager::flushTexToDesSet()//更新绘制用描述集的方法
@@ -831,13 +836,16 @@ void MyVulkanManager::drawObject() {
 
         // 开始渲染通道
         vkCmdBeginRenderPass(cmdBuffer, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);//启动渲染通道
-        // 保护现场
-        MatrixState3D::pushMatrix();
-        MatrixState3D::rotate(xAngle,1,0,0);
-        MatrixState3D::rotate(yAngle,0,1,0);
-        ballForDraw->drawSelf(cmdBuffer,sqsCL->pipelineLayout,sqsCL->pipeline,&(sqsCL->descSet[0]));
 
-        MatrixState3D::popMatrix();
+        MatrixState3D::pushMatrix();//保护现场
+        MatrixState3D::translate(-1.5f,0,-15);//执行平移
+        ballForDraw->drawSelf(cmdBuffer,sqsCL->pipelineLayout,sqsCL->pipeline,&(sqsCL->descSet[0]));//绘制左侧的球
+        MatrixState3D::popMatrix();//恢复现场
+        MatrixState3D::pushMatrix();//保护现场
+        MatrixState3D::translate(1.5f,0,-15);//执行平移
+        ballForDraw->drawSelf(cmdBuffer,sqsCL->pipelineLayout,sqsCL->pipeline,&(sqsCL->descSet[0]));//绘制右侧的球
+        MatrixState3D::popMatrix();//恢复现场
+
         vkCmdEndRenderPass(cmdBuffer);//结束渲染通道
         result = vkEndCommandBuffer(cmdBuffer);//结束命令缓冲
         assert(result == VK_SUCCESS);
