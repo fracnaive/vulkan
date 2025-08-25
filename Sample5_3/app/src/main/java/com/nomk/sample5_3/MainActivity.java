@@ -1,4 +1,4 @@
-package com.nomk.sample5_2;
+package com.nomk.sample5_3;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -10,14 +10,16 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.widget.TextView;
 
-import com.nomk.sample5_2.databinding.ActivityMainBinding;
+import com.nomk.sample5_3.databinding.ActivityMainBinding;
 
 public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback{
 
-    // Used to load the 'sample5_2' library on application startup.
+    // Used to load the 'sample5_3' library on application startup.
     static {
-        System.loadLibrary("sample5_2");
+        System.loadLibrary("sample5_3");
     }
+
+    private ActivityMainBinding binding;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
