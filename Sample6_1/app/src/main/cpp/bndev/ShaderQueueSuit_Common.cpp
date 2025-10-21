@@ -239,7 +239,7 @@ void ShaderQueueSuit_Common::initVertexAttributeInfo() {
     vertexAttribs[1].offset = 12;//法向量输入属性的偏移量
 }
 
-void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &renderPass) {
+void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &renderPass, VulkanDeviceConfig& deviceConfig) {
     VkDynamicState dynamicStateEnables[VK_DYNAMIC_STATE_RANGE_SIZE];//动态状态启用标志
     memset(dynamicStateEnables, 0, sizeof dynamicStateEnables);    //设置所有标志为false
 
@@ -272,7 +272,7 @@ void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &re
     rs.polygonMode = VK_POLYGON_MODE_FILL;//绘制方式为填充
     rs.cullMode = VK_CULL_MODE_NONE;//不使用背面剪裁
     rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;    //卷绕方向为逆时针
-    rs.depthClampEnable = VK_TRUE;//深度截取
+    rs.depthClampEnable = deviceConfig.enableDepthClamp;//深度截取
     rs.rasterizerDiscardEnable = VK_FALSE;//启用光栅化操作（若为TRUE则光栅化不产生任何片元）
     rs.depthBiasEnable = VK_FALSE;//不启用深度偏移
     rs.depthBiasConstantFactor = 0;    //深度偏移常量因子
@@ -403,14 +403,15 @@ void ShaderQueueSuit_Common::destroy_pipe_line(VkDevice &device) {
 }
 
 ShaderQueueSuit_Common::ShaderQueueSuit_Common(VkDevice *deviceIn, VkRenderPass &renderPass,
-                                               VkPhysicalDeviceMemoryProperties &memoryroperties) {
+                                               VkPhysicalDeviceMemoryProperties &memoryroperties,
+                                               VulkanDeviceConfig& deviceConfig) {
     this->devicePointer = deviceIn;
     create_uniform_buffer(*devicePointer, memoryroperties);//创建一致变量缓冲
     create_pipeline_layout(*devicePointer);//创建管线布局
     init_descriptor_set(*devicePointer);//初始化描述集
     create_shader(*devicePointer);//创建着色器
     initVertexAttributeInfo();//初始化顶点属性信息
-    create_pipe_line(*devicePointer, renderPass);//创建管线
+    create_pipe_line(*devicePointer, renderPass, deviceConfig);//创建管线
 }
 
 ShaderQueueSuit_Common::~ShaderQueueSuit_Common() {//析构函数

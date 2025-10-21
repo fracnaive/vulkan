@@ -115,4 +115,43 @@ TexDataObject* SpirvLoader::loadCommonTexData(const string& fname){			//加载bn
     return ctdo;													//返回结果
 }
 
+TexDataObject* SpirvLoader::loadCommonASTCTexData(const string& fname){			//加载bntex纹理数据
+    AAsset* asset = AAssetManager_open(aam,fname.c_str(), AASSET_MODE_UNKNOWN);			//创建AAsset对象
+    if (!asset) {
+        throw std::runtime_error("[TextureManager] 无法打开assets下的astc文件：" + fname);
+    }
+
+    // 读取头部
+    ASTCHeader header{};
+    int headBytes = AAsset_read(asset, &header, sizeof(ASTCHeader));
+    if (headBytes != sizeof(ASTCHeader)) {
+        AAsset_close(asset);
+        throw std::runtime_error("[TextureManager] 读取ASTC文件头失败！");
+    }
+
+    // 校验magic number
+    if (header.magic[0] != 0x13 || header.magic[1] != 0xAB ||
+        header.magic[2] != 0xA1 || header.magic[3] != 0x5C) {
+        AAsset_close(asset);
+        throw std::runtime_error("[TextureManager] 不是有效的astc文件！");
+    }
+
+    // 读取尺寸
+    uint32_t width = header.xSize[0] | (header.xSize[1] << 8) | (header.xSize[2] << 16);
+    uint32_t height = header.ySize[0] | (header.ySize[1] << 8) | (header.ySize[2] << 16);
+    uint32_t depth = header.zSize[0] | (header.zSize[1] << 8) | (header.zSize[2] << 16);
+
+    // 剩余全部都是压缩纹理数据
+    off_t totalLen = AAsset_getLength(asset);
+    size_t dataLen = totalLen - sizeof(ASTCHeader);
+    auto* data = new unsigned char[dataLen];
+    AAsset_read(asset, data, dataLen);
+
+    AAsset_close(asset);
+
+    // 后续交给显卡解码，无需自己解压
+    auto* pTexDataObject = new TexDataObject((int)width, (int)height, data, (int)dataLen);
+    return pTexDataObject;
+}
+
 

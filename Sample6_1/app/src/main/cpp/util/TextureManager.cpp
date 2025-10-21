@@ -58,12 +58,14 @@ void setImageLayout(VkCommandBuffer cmd, VkImage image,VkImageAspectFlags aspect
                          nullptr, 0, nullptr, 1, &image_memory_barrier);
 }
 
-std::vector<std::string> TextureManager::texNames={"texture/wall.bntex"};
+std::vector<std::string> TextureManager::texNames={"texture/1.astc"};
 std::vector<VkSampler> TextureManager::samplerList;
 std::map<std::string,VkImage> TextureManager::textureImageList;
 std::map<std::string,VkDeviceMemory> TextureManager::textureMemoryList;
 std::map<std::string,VkImageView> TextureManager::viewTextureList;
 std::map<std::string,VkDescriptorImageInfo> TextureManager::texImageInfoList;
+VkBuffer TextureManager::stagingBuffer = VK_NULL_HANDLE;
+VkDeviceMemory TextureManager::stagingMemory = VK_NULL_HANDLE;
 void TextureManager::initSampler(VkDevice& device, VkPhysicalDevice& gpu){
     VkSamplerCreateInfo samplerCreateInfo = {}; //构建采样器创建信息结构体实例
     samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO; //结构体的类型
@@ -300,16 +302,154 @@ void TextureManager::init_SPEC_2D_Textures(std::string texName, VkDevice& device
     delete ctdo; //删除内存中的纹理数据
 }
 
+void TextureManager::init_ASTC_2D_Textures(std::string texName, VkDevice &device,
+                                           VkPhysicalDevice &gpu,
+                                           VkPhysicalDeviceMemoryProperties &memoryroperties,
+                                           VkCommandBuffer &cmdBuffer,
+                                           VkFormat format, VulkanDeviceConfig& deviceConfig) {
+    VkFormatProperties formatProps;
+    vkGetPhysicalDeviceFormatProperties(gpu, format, &formatProps);
+    if(!(formatProps.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) {
+        LOGE("[TextureManager] ASTC_5x5_UNORM_BLOCK不支持VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT");
+        return;
+    }
+    TexDataObject* ctdo = SpirvLoader::loadCommonASTCTexData(texName);
+
+    // 1.创建纹理图像（只DEVICE_LOCAL，不映射）
+    VkImageCreateInfo image_create_info = {}; //构建图像创建信息结构体实例
+    image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO; //结构体的类型
+    image_create_info.imageType = VK_IMAGE_TYPE_2D; //图像类型
+    image_create_info.format = format; //图像像素格式
+    image_create_info.extent.width = ctdo->width; //图像宽度
+    image_create_info.extent.height = ctdo->height; //图像高度
+    image_create_info.extent.depth = 1; //图像深度
+    image_create_info.mipLevels = 1; //图像 mipmap 级数
+    image_create_info.arrayLayers = 1; //图像数组层数量
+    image_create_info.samples = VK_SAMPLE_COUNT_1_BIT; //采样模式
+    image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL; //采用
+    image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; //初始布局
+    image_create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;; //图像用途
+    image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE; //共享模式
+    VkImage textureImage; //纹理对应的图像
+    VkResult result = vkCreateImage(device, &image_create_info, nullptr, &textureImage);
+    assert(result == VK_SUCCESS); //检查图像创建是否成功
+    textureImageList[texName] = textureImage; //添加到纹理图像列表
+
+    VkMemoryAllocateInfo mem_alloc = {}; //构建内存分配信息结构体实例
+    mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO; //结构体的类型
+    mem_alloc.allocationSize = 0; //内存字节数
+    mem_alloc.memoryTypeIndex = 0; //内存类型索引
+    VkMemoryRequirements mem_reqs; //纹理图像的内存需求
+    vkGetImageMemoryRequirements(device, textureImage, &mem_reqs);//获取纹理图像的内存需求
+    mem_alloc.allocationSize = mem_reqs.size; //实际分配的内存字节数
+    bool flag = memoryTypeFromProperties(memoryroperties, mem_reqs.memoryTypeBits,
+                                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                         &mem_alloc.memoryTypeIndex); //获取内存类型索引
+    VkDeviceMemory textureMemory; //创建设备内存实例
+    result = vkAllocateMemory(device, &mem_alloc, nullptr, &(textureMemory)); //分配设备内存
+    textureMemoryList[texName] = textureMemory; //添加到纹理内存列表
+    result = vkBindImageMemory(device, textureImage, textureMemory, 0); //绑定图像和内存
+
+    VkBufferCreateInfo bufferInfo = {}; //构建缓冲创建信息结构体实例
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO; //设置结构体类型
+    bufferInfo.size = ctdo->dataByteCount; //数据总字节数
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; //缓冲的用途为传输源
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; //共享模式
+    // 创建一个临时缓冲区域，用于存储ASTC数据
+    vkCreateBuffer(device, &bufferInfo, nullptr, &stagingBuffer); //创建缓冲
+
+    VkMemoryRequirements  stagingMemReqs;
+    vkGetBufferMemoryRequirements(device, stagingBuffer, &stagingMemReqs);
+    VkMemoryAllocateInfo stagingAlloc = {};
+    stagingAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    stagingAlloc.allocationSize = stagingMemReqs.size;
+    flag = memoryTypeFromProperties(memoryroperties, stagingMemReqs.memoryTypeBits,
+                                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                    &stagingAlloc.memoryTypeIndex);
+    result = vkAllocateMemory(device, & stagingAlloc, nullptr, &stagingMemory);
+    assert(result == VK_SUCCESS);
+    vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0);
+
+    // 映射staging buffer并填充数据
+    void* pData = nullptr;
+    vkMapMemory(device, stagingMemory, 0, bufferInfo.size, 0, &pData);
+    memcpy(pData, ctdo->data, bufferInfo.size);
+    vkUnmapMemory(device, stagingMemory);
+
+    // 3.过渡纹理图像layout到TRANSFER_DST_OPTIMAL
+    transitionImageLayout(cmdBuffer, textureImage, VK_FORMAT_ASTC_5x5_UNORM_BLOCK, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // 4.拷贝staging buffer到纹理图像
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {static_cast<uint32_t>(ctdo->width), static_cast<uint32_t>(ctdo->height), 1};
+    vkCmdCopyBufferToImage(
+        cmdBuffer,
+        stagingBuffer,
+        textureImage,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region);
+    //5.过度纹理图像layout到SHADER_READ_ONLY_OPTIMAL
+    transitionImageLayout(cmdBuffer, textureImage, format, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    VkImageViewCreateInfo viewInfo = {}; //构建图像视图创建信息结构体实例
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; //结构的类型
+    viewInfo.image = textureImage; //对应的图像
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; //图像视图的类型
+    viewInfo.format = format; //图像视图的像素格式
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;//图像视图使用方面
+    viewInfo.subresourceRange.baseMipLevel = 0; //基础 Mipmap 级别
+    viewInfo.subresourceRange.levelCount = 1; //Mipmap 级别的数量
+    viewInfo.subresourceRange.baseArrayLayer = 0; //基础数组层
+    viewInfo.subresourceRange.layerCount = 1; //数组层的数量
+    VkImageView textureImageView; //纹理图像对应的图像视图
+    vkCreateImageView(device, &viewInfo, nullptr, &textureImageView);
+
+    VkSamplerCreateInfo samplerCreateInfo = {}; //构建采样器创建信息结构体实例
+    samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO; //结构体的类型
+    samplerCreateInfo.magFilter = VK_FILTER_LINEAR; //放大时的纹理采样方式
+    samplerCreateInfo.minFilter = VK_FILTER_LINEAR; //缩小时的纹理采样方式
+    samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; //纹理 S 轴的拉伸方式
+    samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT; //纹理 T 轴的拉伸方式
+    samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT; //纹理 W 轴的拉伸方式
+    samplerCreateInfo.anisotropyEnable = deviceConfig.enableAnisotropy; //是否启用各向异性过滤
+    samplerCreateInfo.maxAnisotropy = 16; //各向异性最大过滤值
+    samplerCreateInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK; //要使用的预定义边框颜色
+    samplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerCreateInfo.compareEnable = VK_FALSE; //是否开启比较功能
+    samplerCreateInfo.compareOp = VK_COMPARE_OP_ALWAYS; //纹素数据比较操作
+    samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;//mipmap 模式
+    VkSampler textureSampler; //声明采样器对象
+    vkCreateSampler(device,&samplerCreateInfo, nullptr, &textureSampler); //创建采样器
+
+    viewTextureList[texName] = textureImageView; //添加到图像视图列表
+    VkDescriptorImageInfo texImageInfo; //构建图像描述信息实例
+    texImageInfo.imageView = textureImageView; //采用的图像视图
+    texImageInfo.sampler = textureSampler; //采用的采样器
+    texImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;//图像布局
+    texImageInfoList[texName] = texImageInfo; //添加到纹理图像描述信息列表
+}
+
 void TextureManager::initTextures(VkDevice& device, //加载所有纹理的方法
                                   VkPhysicalDevice& gpu, VkPhysicalDeviceMemoryProperties& memoryroperties,
-                                  VkCommandBuffer& cmdBuffer, VkQueue& queueGraphics){
+                                  VkCommandBuffer& cmdBuffer, VkQueue& queueGraphics, VulkanDeviceConfig& deviceConfig){
     initSampler(device, gpu); //初始化采样器
-    for (const auto & texName : texNames){ //遍历纹理文件名称列表
-        TexDataObject* ctdo = SpirvLoader::loadCommonTexData(texName); //加载纹理文件数据
-        LOGE("%s w %d h %d", texName.c_str(), ctdo->width, ctdo->height); //打印纹理数据信息
-        init_SPEC_2D_Textures(texName, device, gpu, memoryroperties, //加载 2D 纹理
-                              cmdBuffer, queueGraphics, VK_FORMAT_R8G8B8A8_UNORM,ctdo);
-    }
+//    for (const auto & texName : texNames){ //遍历纹理文件名称列表
+//        TexDataObject* ctdo = SpirvLoader::loadCommonTexData(texName); //加载纹理文件数据
+//        LOGE("%s w %d h %d", texName.c_str(), ctdo->width, ctdo->height); //打印纹理数据信息
+//        init_SPEC_2D_Textures(texName, device, gpu, memoryroperties, //加载 2D 纹理
+//                              cmdBuffer, queueGraphics, VK_FORMAT_R8G8B8A8_UNORM,ctdo);
+//    }
+    init_ASTC_2D_Textures("texture/1.astc", device, gpu, memoryroperties, //加载 2D 纹理
+                              cmdBuffer, VK_FORMAT_ASTC_5x5_UNORM_BLOCK, deviceConfig);
 }
 
 void TextureManager::destroyTextures(VkDevice& device){ //销毁纹理的方法

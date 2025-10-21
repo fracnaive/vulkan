@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <vulkan/vulkan.h>
+#include "struct.h"
 
 #define VK_DYNAMIC_STATE_RANGE_SIZE 32  // 足够容纳常见动态状态的数量
 
@@ -27,7 +28,7 @@ private:
     void create_shader(VkDevice &device);//创建着色器
     void destroy_shader(VkDevice &device);//销毁着色器
     void initVertexAttributeInfo();//初始化顶点输入属性信息
-    void create_pipe_line(VkDevice &device, VkRenderPass &renderPass);//创建管线
+    void create_pipe_line(VkDevice &device, VkRenderPass &renderPass, VulkanDeviceConfig& deviceConfig);//创建管线
     void destroy_pipe_line(VkDevice &device);//销毁管线
     static char* vkResultToString(VkResult result);
 public:
@@ -38,7 +39,8 @@ public:
     VkPipelineLayout pipelineLayout;//管线布局
     VkPipeline pipeline;//管线
     ShaderQueueSuit_Common(VkDevice *deviceIn, VkRenderPass &renderPass,
-                           VkPhysicalDeviceMemoryProperties &memoryroperties);//构造函数
+                           VkPhysicalDeviceMemoryProperties &memoryroperties,
+                           VulkanDeviceConfig& deviceConfig);//构造函数
     ~ShaderQueueSuit_Common();//析构函数
 };
 

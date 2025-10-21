@@ -198,6 +198,19 @@ void MyVulkanManager::create_vulkan_devices() {
     vkGetPhysicalDeviceQueueFamilyProperties(gpus[0], &queueFamilyCount,
                                              queueFamilyprops.data());//填充物理设备0队列家族属性列表
     LOGE("[成功获取Vulkan硬件设备0支持的队列家族属性列表]");
+    // 查询物理设备特性
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceFeatures(gpus[0], &deviceFeatures);
+
+    VkPhysicalDeviceFeatures enabledFeatures = {};
+    if (deviceFeatures.depthClamp) {
+        enabledFeatures.depthClamp = VK_TRUE;
+        deviceConfig.enableDepthClamp = VK_TRUE;
+    }
+    if (deviceFeatures.samplerAnisotropy) {
+        enabledFeatures.samplerAnisotropy = VK_TRUE;
+        deviceConfig.enableAnisotropy = VK_TRUE;
+    }
 
     VkDeviceQueueCreateInfo queueInfo = {};//构建设备队列创建信息结构体实例
     bool found = false;//辅助标志
@@ -229,7 +242,7 @@ void MyVulkanManager::create_vulkan_devices() {
     deviceInfo.ppEnabledExtensionNames = deviceExtensionNames.data();//所需扩展列表
     deviceInfo.enabledLayerCount = 0;//需启动Layer的数量
     deviceInfo.ppEnabledLayerNames = nullptr;//需启动Layer的名称列表
-    deviceInfo.pEnabledFeatures = nullptr;//启用的设备特性
+    deviceInfo.pEnabledFeatures = &enabledFeatures;//启用的设备特性
     VkResult result = vkCreateDevice(gpus[0], &deviceInfo, nullptr, &device);//创建逻辑设备
     assert(result == VK_SUCCESS);//检查逻辑设备是否创建成功
 
@@ -460,7 +473,7 @@ void MyVulkanManager::create_vulkan_swapChain() {
     swapchain_ci.imageExtent.width = swapchainExtent.width;//交换链图像宽度
     swapchain_ci.imageExtent.height = swapchainExtent.height;//交换链图像高度
     swapchain_ci.preTransform = preTransform;//指定变换标志
-    swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;//混合Alpha值
+    swapchain_ci.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;//混合Alpha值
     swapchain_ci.imageArrayLayers = 1;//图像数组层数
     swapchain_ci.presentMode = swapchainPresentMode;//交换链的显示模式
     swapchain_ci.oldSwapchain = VK_NULL_HANDLE;//前导交换链
@@ -883,7 +896,7 @@ void MyVulkanManager::drawObject() {
         MatrixState3D::rotate(yAngle,0,1,0);//绕y轴旋转
         MatrixState3D::rotate(zAngle,0,0,1);//绕z轴旋转
         texTri->drawSelf(cmdBuffer,sqsCL->pipelineLayout,sqsCL->pipeline, //绘制纹理三角形
-                         &(sqsCL->descSet[TextureManager::getVkDescriptorSetIndex("texture/wall.bntex")]));
+                         &(sqsCL->descSet[TextureManager::getVkDescriptorSetIndex("texture/1.astc")]));
         MatrixState3D::popMatrix();	//恢复现场
 
         vkCmdEndRenderPass(cmdBuffer);//结束渲染通道
@@ -925,7 +938,63 @@ void MyVulkanManager::doVulkan() {
 }
 
 void MyVulkanManager::init_texture(){//初始化纹理的方法
-    TextureManager::initTextures(device, gpus[0], memoryroperties, cmdBuffer, queueGraphics);
+    //1.创建专用命令池（只用于资源初始化）
+    VkCommandPool initCmdPool;
+    VkCommandPoolCreateInfo initPoolInfo = {};
+    initPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    initPoolInfo.queueFamilyIndex = queueGraphicsFamilyIndex;
+    initPoolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    vkCreateCommandPool(device, &initPoolInfo, nullptr, &initCmdPool);
+
+    // 2.分配命令缓冲区
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = initCmdPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer initCmdBuffer;
+    vkAllocateCommandBuffers(device, &allocInfo, &initCmdBuffer);
+
+    // 3.录制命令
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(initCmdBuffer, &beginInfo);
+
+    TextureManager::initTextures(device, gpus[0], memoryroperties, initCmdBuffer, queueGraphics, deviceConfig);
+
+    vkEndCommandBuffer(initCmdBuffer);
+
+    // 4.创建Fence
+    VkFence fence;
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = 0;
+    vkCreateFence(device, &fenceInfo, nullptr, &fence);
+
+    //5.提交命令缓冲区，并绑定Fence
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &initCmdBuffer;
+    vkQueueSubmit(queueGraphics, 1, &submitInfo, fence);
+
+    // 6.等待Fence信号，确保资源初始化完成
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    //7.资源回收
+    if (TextureManager::stagingBuffer != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, TextureManager::stagingBuffer, nullptr);
+        TextureManager::stagingBuffer = VK_NULL_HANDLE;
+    }
+    if (TextureManager::stagingMemory != VK_NULL_HANDLE) {
+        vkFreeMemory(device, TextureManager::stagingMemory, nullptr);
+        TextureManager::stagingMemory = VK_NULL_HANDLE;
+    }
+    vkFreeCommandBuffers(device, initCmdPool, 1, &initCmdBuffer);
+    vkDestroyCommandPool(device, initCmdPool, nullptr);
+    vkDestroyFence(device, fence, nullptr);
 }
 
 void MyVulkanManager::destroy_textures(){//销毁纹理的方法
@@ -936,7 +1005,7 @@ void MyVulkanManager::initPipeline()//初始化管线的方法
 {
     assert(device != VK_NULL_HANDLE && "逻辑设备未初始化");
     assert(renderPass != VK_NULL_HANDLE && "渲染通道未初始化");
-    sqsCL = new ShaderQueueSuit_Common(&device, renderPass, memoryroperties);//创建封装了渲染管线相关的对象
+    sqsCL = new ShaderQueueSuit_Common(&device, renderPass, memoryroperties, deviceConfig);//创建封装了渲染管线相关的对象
 }
 
 void MyVulkanManager::destroyPipeline()//销毁管线

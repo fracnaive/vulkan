@@ -36,6 +36,18 @@ public:
     static bool createShaderModule(VkDevice device, const std::vector<uint32_t>& spirvData, VkShaderModule& shaderModule);
 
     static TexDataObject* loadCommonTexData(const string& fname);
+
+    static TexDataObject* loadCommonASTCTexData(const string& fname);
+
+    struct ASTCHeader {
+        uint8_t magic[4];
+        uint8_t blockDimX;
+        uint8_t blockDimY;
+        uint8_t blockDimZ;
+        uint8_t xSize[3];
+        uint8_t ySize[3];
+        uint8_t zSize[3];
+    };
 };
 
 
