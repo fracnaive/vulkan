@@ -11,6 +11,7 @@
 #include "ShaderQueueSuit_Common.h"
 #include "TextureManager.h"
 #include "TexDrawableObject.h"
+#include "struct.h"
 
 #define FENCE_TIMEOUT 100000000
 class MyVulkanManager
@@ -66,6 +67,8 @@ public:
     static float yAngle;//三角形旋转角度
     static float zAngle;//三角形旋转角度
     static TexDrawableObject* texTri;
+    static VkDebugUtilsMessengerEXT debugMessenger;
+    static VulkanDeviceConfig deviceConfig;
     static void init_vulkan_instance();//创建Vulkan实例
     static void enumerate_vulkan_phy_devices();//初始化物理设备
     static void create_vulkan_devices();//创建逻辑设备
@@ -99,6 +102,16 @@ public:
 
     static void setWindow(ANativeWindow *pWindow);
     static void setAssetManager(AAssetManager *pManager);
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+            VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+            VkDebugUtilsMessageTypeFlagsEXT messageType,
+            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+            void* pUserData)
+    {
+        __android_log_print(ANDROID_LOG_ERROR, "VulkanValidation",
+                            "Validation layer: %s", pCallbackData->pMessage);
+        return VK_FALSE;
+    }
 };
 
 

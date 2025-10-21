@@ -68,6 +68,9 @@ float MyVulkanManager::zAngle = 0;
 static ANativeWindow *sWindow = nullptr;
 static AAssetManager *aAssetManager = nullptr;
 
+VulkanDeviceConfig MyVulkanManager::deviceConfig = {VK_FALSE, VK_FALSE};
+VkDebugUtilsMessengerEXT MyVulkanManager::debugMessenger = VK_NULL_HANDLE;
+
 // 新增：设置窗口（由JNI层调用传入ANativeWindow）
 void MyVulkanManager::setWindow(ANativeWindow *window) {
     sWindow = window;
@@ -105,6 +108,8 @@ void MyVulkanManager::init_vulkan_instance() {
     app_info.engineVersion = 1;//应用的引擎版本号
     app_info.apiVersion = VK_API_VERSION_1_0;//使用的Vulkan图形应用程序API版本
 
+    const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"}; //启用验证层
+    instanceExtensionNames.push_back("VK_EXT_debug_utils"); //启用调试扩展
     VkInstanceCreateInfo inst_info = {};//构建实例创建信息结构体实例
     inst_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;//结构体的类型
     inst_info.pNext = nullptr;//自定义数据的指针
@@ -112,13 +117,41 @@ void MyVulkanManager::init_vulkan_instance() {
     inst_info.pApplicationInfo = &app_info;//绑定应用信息结构体
     inst_info.enabledExtensionCount = instanceExtensionNames.size();//扩展的数量
     inst_info.ppEnabledExtensionNames = instanceExtensionNames.data();//扩展名称列表数据
-    inst_info.enabledLayerCount = 0;//启动的层数量
-    inst_info.ppEnabledLayerNames = nullptr;//启动的层名称列表
+    inst_info.enabledLayerCount = 1;//启动的层数量
+    inst_info.ppEnabledLayerNames = validationLayers;//启动的层名称列表
     VkResult result;//存储运行结果的辅助变量
     //创建Vulkan实例
     result = vkCreateInstance(&inst_info, nullptr, &instance);
     if (result == VK_SUCCESS) {//检查实例是否创建成功
         LOGE("Vulkan实例创建成功!");
+
+        // 创建Debug Messenger
+        VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
+        debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        debugCreateInfo.messageSeverity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        debugCreateInfo.messageType =
+                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        debugCreateInfo.pfnUserCallback = debugCallback;
+        debugCreateInfo.pUserData = nullptr;
+
+        // 注册Debug Messenger
+        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+                vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        if (func != nullptr) {
+            VkResult result1 = func(instance, &debugCreateInfo, nullptr, &debugMessenger);
+            if (result1 == VK_SUCCESS) {
+                __android_log_print(ANDROID_LOG_INFO, "VulkanValidation", "Vulkan Debug Messenger create success!");
+            } else {
+                __android_log_print(ANDROID_LOG_ERROR, "VulkanValidation", "Vulkan Debug Messenger create failed, result: %d", result1);
+            }
+        } else {
+            LOGE("Vulkan func is null!");
+        }
     } else {
         LOGE("Vulkan实例创建失败!");
     }
@@ -127,6 +160,11 @@ void MyVulkanManager::init_vulkan_instance() {
 //销毁Vulkan实例的方法
 void MyVulkanManager::destroy_vulkan_instance() {
     if (instance != VK_NULL_HANDLE) {
+        auto destroyFunc = (PFN_vkDestroyDebugUtilsMessengerEXT)
+                vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+        if (destroyFunc != nullptr) {
+            destroyFunc(instance, debugMessenger, nullptr);
+        }
         vkDestroyInstance(instance, nullptr);
         instance = VK_NULL_HANDLE;
         LOGE("Vulkan实例销毁完毕!");
