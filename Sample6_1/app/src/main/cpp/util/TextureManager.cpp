@@ -66,6 +66,8 @@ std::map<std::string,VkImageView> TextureManager::viewTextureList;
 std::map<std::string,VkDescriptorImageInfo> TextureManager::texImageInfoList;
 VkBuffer TextureManager::stagingBuffer = VK_NULL_HANDLE;
 VkDeviceMemory TextureManager::stagingMemory = VK_NULL_HANDLE;
+int TextureManager::textureWidth = 0;
+int TextureManager::textureHeight = 0;
 void TextureManager::initSampler(VkDevice& device, VkPhysicalDevice& gpu){
     VkSamplerCreateInfo samplerCreateInfo = {}; //构建采样器创建信息结构体实例
     samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO; //结构体的类型
@@ -314,6 +316,8 @@ void TextureManager::init_ASTC_2D_Textures(std::string texName, VkDevice &device
         return;
     }
     TexDataObject* ctdo = SpirvLoader::loadCommonASTCTexData(texName);
+    textureWidth = ctdo->width;
+    textureHeight = ctdo->height;
 
     // 1.创建纹理图像（只DEVICE_LOCAL，不映射）
     VkImageCreateInfo image_create_info = {}; //构建图像创建信息结构体实例

@@ -124,6 +124,7 @@ void MyVulkanManager::init_vulkan_instance() {
     result = vkCreateInstance(&inst_info, nullptr, &instance);
     if (result == VK_SUCCESS) {//检查实例是否创建成功
         LOGE("Vulkan实例创建成功!");
+        loopDrawFlag = true;
 
         // 创建Debug Messenger
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo = {};
@@ -456,14 +457,7 @@ void MyVulkanManager::create_vulkan_swapChain() {
         desiredMinNumberOfSwapChainImages = surfCapabilities.maxImageCount;
     }
 
-    VkSurfaceTransformFlagBitsKHR preTransform;//KHR表面变换标志
-    if (surfCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)//若支持所需的变换
-    {
-        preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    } else//若不支持所需的变换
-    {
-        preTransform = surfCapabilities.currentTransform;
-    }
+    VkSurfaceTransformFlagBitsKHR preTransform = surfCapabilities.currentTransform;//KHR表面变换标志
     VkSwapchainCreateInfoKHR swapchain_ci = {};//构建交换链创建信息结构体实例
     swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;//结构体类型
     swapchain_ci.pNext = nullptr;//自定义数据的指针
@@ -785,12 +779,23 @@ void MyVulkanManager::destroy_frame_buffer() {
 //创建绘制用物体
 void MyVulkanManager::createDrawableObject() {
     LOGI("zzz createDrawableObject");
-    auto* vdataIn=new float[15]{								//顶点数据数组
-            0,10,0, 0.5,0,										//第1个顶点的数据
-            -9,-5,0, 0,1, 										//第2个顶点的数据
-            9,-5,0, 1,1											//第3个顶点的数据
+    float radio = 1;
+    if (TextureManager::textureWidth != 0) {
+        radio = (float)TextureManager::textureHeight / (float)TextureManager::textureWidth;
+    }
+    float halfWidth = 7.0f;
+    float halfHeight = halfWidth * radio;
+    int vertexNum = 6;
+    int dataNum = vertexNum * 5;
+    auto* vdataIn = new float[dataNum]{								//顶点数据数组
+            -halfWidth, halfHeight, 0, 0, 0,    //第1个顶点的数据
+            -halfWidth, -halfHeight, 0, 0, 1,   //第2个顶点的数据
+            halfWidth, halfHeight, 0, 1, 0,//第3个顶点的数据
+            halfWidth,halfHeight,0, 1,0,
+            -halfWidth,-halfHeight,0, 0,1,
+            halfWidth,-halfHeight,0, 1,1
     };
-    texTri = new TexDrawableObject(vdataIn,15*4,3,device, memoryroperties);//创建三角形绘制物体
+    texTri = new TexDrawableObject(vdataIn,dataNum * 4,vertexNum,device, memoryroperties);//创建三角形绘制物体
 }
 
 //销毁绘制用物体
@@ -833,6 +838,9 @@ void MyVulkanManager::initMatrixAndLight() {
     MatrixState3D::setCamera(0,0,30,0,0,0,0,1,0);
     MatrixState3D::setInitStack();
     float ratio=(float)screenWidth/(float)screenHeight;
+    if (ratio > 1) {
+        ratio = 1.0f / ratio;
+    }
     MatrixState3D::setProjectFrustum(-ratio,ratio,-1,1,1.5f,1000);
 }
 
@@ -875,9 +883,14 @@ void MyVulkanManager::drawObject() {
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
             // 交换链过期，需要重建（简化处理，实际项目需重新创建交换链）
             LOGE("交换链过期，尝试继续...");
-            continue;
+            loopDrawFlag = false;
+            break;
         }
-        assert(result == VK_SUCCESS);
+        if (result != VK_SUCCESS) {
+            loopDrawFlag = false;
+            LOGE("[MyVulkanManager] vkAcquireNextImageKHR failed result: %d", result);
+            break;
+        }
 
         // 开始录制命令缓冲
         rp_begin.framebuffer = framebuffers[currentBuffer];    //为渲染通道设置当前帧缓冲

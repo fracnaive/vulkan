@@ -22,6 +22,8 @@ public:
     static std::map<std::string,VkDescriptorImageInfo> texImageInfoList; //纹理图像描述信息列表
     static VkBuffer stagingBuffer;
     static VkDeviceMemory stagingMemory;
+    static int textureWidth;
+    static int textureHeight;
     static void initTextures(VkDevice& device,VkPhysicalDevice& gpu,
                              VkPhysicalDeviceMemoryProperties& memoryroperties,
                              VkCommandBuffer& cmdBuffer,VkQueue& queueGraphics, VulkanDeviceConfig& deviceConfig); //加载所有纹理的方法

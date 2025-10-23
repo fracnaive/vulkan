@@ -235,7 +235,7 @@ void ShaderQueueSuit_Common::initVertexAttributeInfo() {
 
     vertexAttribs[1].binding = 0;//法向量输入属性的绑定点
     vertexAttribs[1].location = 1;//法向量输入属性的位置索引
-    vertexAttribs[1].format = VK_FORMAT_R32G32B32_SFLOAT;//法向量输入属性的数据格式
+    vertexAttribs[1].format = VK_FORMAT_R32G32_SFLOAT;//法向量输入属性的数据格式
     vertexAttribs[1].offset = 12;//法向量输入属性的偏移量
 }
 
