@@ -112,6 +112,41 @@ public:
                             "Validation layer: %s", pCallbackData->pMessage);
         return VK_FALSE;
     }
+
+    // 定义内存屏障
+    static void insertImageMemoryBarrier2KHR(
+            VkCommandBuffer commandBuffer,
+            VkImage image,
+            VkAccessFlags srcAccessMask,
+            VkAccessFlags dstAccessMask,
+            VkImageLayout oldLayout,
+            VkImageLayout newLayout,
+            VkPipelineStageFlags srcStageMask,
+            VkPipelineStageFlags dstStageMask,
+            VkImageSubresourceRange subresourceRange
+    ) {
+        VkImageMemoryBarrier2KHR barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR;
+        barrier.srcStageMask = srcStageMask;
+        barrier.dstStageMask = dstStageMask;
+        barrier.srcAccessMask = srcAccessMask;
+        barrier.dstAccessMask = dstAccessMask;
+        barrier.oldLayout = oldLayout;
+        barrier.newLayout = newLayout;
+        barrier.image = image;
+        barrier.subresourceRange = subresourceRange;
+
+        VkDependencyInfoKHR depInfoInit{};
+        depInfoInit.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR;
+        depInfoInit.imageMemoryBarrierCount = 1;
+        depInfoInit.pImageMemoryBarriers = &barrier;
+
+        auto vkCmdPipelineBarrier2KHR =
+                (PFN_vkCmdPipelineBarrier2KHR) vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
+        if (vkCmdPipelineBarrier2KHR) {
+            vkCmdPipelineBarrier2KHR(commandBuffer, &depInfoInit);
+        }
+    }
 };
 
 

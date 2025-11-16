@@ -106,7 +106,7 @@ void MyVulkanManager::init_vulkan_instance() {
     app_info.applicationVersion = 1;//应用的版本号
     app_info.pEngineName = "HelloVulkan";//应用的引擎名称
     app_info.engineVersion = 1;//应用的引擎版本号
-    app_info.apiVersion = VK_API_VERSION_1_0;//使用的Vulkan图形应用程序API版本
+    app_info.apiVersion = VK_API_VERSION_1_3;//使用的Vulkan图形应用程序API版本
 
     const char* validationLayers[] = {"VK_LAYER_KHRONOS_validation"}; //启用验证层
     instanceExtensionNames.push_back("VK_EXT_debug_utils"); //启用调试扩展
@@ -193,6 +193,45 @@ void MyVulkanManager::enumerate_vulkan_phy_devices() {
 
 //创建逻辑设备的方法
 void MyVulkanManager::create_vulkan_devices() {
+
+    // 查询物理设备支持的扩展列表
+    uint32_t extensionCount = 0;
+// 第一步：获取扩展数量
+    VkResult result = vkEnumerateDeviceExtensionProperties(gpus[0], nullptr, &extensionCount, nullptr);
+    if (result != VK_SUCCESS) {
+        LOGE("查询设备扩展数量失败，错误码: %d", result);
+        return; // 处理错误
+    }
+
+// 第二步：分配内存存储扩展信息
+    std::vector<VkExtensionProperties> extensions(extensionCount);
+// 第三步：获取扩展详情
+    result = vkEnumerateDeviceExtensionProperties(gpus[0], nullptr, &extensionCount, extensions.data());
+    if (result != VK_SUCCESS) {
+        LOGE("查询设备扩展详情失败，错误码: %d", result);
+        return; // 处理错误
+    }
+
+// 第四步：打印所有支持的扩展
+    LOGE("物理设备支持的扩展总数: %d", extensionCount);
+    for (const auto& ext : extensions) {
+        LOGE("支持的扩展: %s，版本: %u", ext.extensionName, ext.specVersion);
+    }
+
+// 检查是否包含需要的扩展（例如 VK_KHR_swapchain 和 VK_KHR_synchronization2）
+    bool hasSwapchain = false;
+    bool hasSync2 = false;
+    for (const auto& ext : extensions) {
+        if (strcmp(ext.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) {
+            hasSwapchain = true;
+        }
+        if (strcmp(ext.extensionName, "VK_KHR_synchronization2") == 0) {
+            hasSync2 = true;
+        }
+    }
+    LOGE("是否支持 VK_KHR_swapchain: %s", hasSwapchain ? "是" : "否");
+    LOGE("是否支持 VK_KHR_synchronization2: %s", hasSync2 ? "是" : "否");
+
     vkGetPhysicalDeviceQueueFamilyProperties(gpus[0], &queueFamilyCount, nullptr);//获取物理设备0中队列家族的数量
     LOGE("[Vulkan硬件设备0支持的队列家族数量为%d]", queueFamilyCount);
     queueFamilyprops.resize(queueFamilyCount);//随队列家族数量改变vector长度
@@ -233,10 +272,23 @@ void MyVulkanManager::create_vulkan_devices() {
     queueInfo.pQueuePriorities = queue_priorities;//给出每个队列的优先级
     queueInfo.queueFamilyIndex = queueGraphicsFamilyIndex;//绑定队列家族索引
     deviceExtensionNames.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);//设置所需扩展
+    deviceExtensionNames.push_back("VK_KHR_synchronization2");//设置所需扩展
+
+    VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features = {};
+    sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+    sync2Features.synchronization2 = VK_TRUE;
+
+    //设备创建时启用动态渲染扩展和特性
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {};
+    dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+
+    //串联pNext链
+    sync2Features.pNext = &dynamicRenderingFeatures;
 
     VkDeviceCreateInfo deviceInfo = {};//构建逻辑设备创建信息结构体实例
     deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;//给出结构体类型
-    deviceInfo.pNext = nullptr;//自定义数据的指针
+    deviceInfo.pNext = &sync2Features;//自定义数据的指针
     deviceInfo.queueCreateInfoCount = 1;//指定设备队列创建信息结构体数量
     deviceInfo.pQueueCreateInfos = &queueInfo;//给定设备队列创建信息结构体列表
     deviceInfo.enabledExtensionCount = deviceExtensionNames.size();//所需扩展数量
@@ -244,12 +296,16 @@ void MyVulkanManager::create_vulkan_devices() {
     deviceInfo.enabledLayerCount = 0;//需启动Layer的数量
     deviceInfo.ppEnabledLayerNames = nullptr;//需启动Layer的名称列表
     deviceInfo.pEnabledFeatures = &enabledFeatures;//启用的设备特性
-    VkResult result = vkCreateDevice(gpus[0], &deviceInfo, nullptr, &device);//创建逻辑设备
+    result = vkCreateDevice(gpus[0], &deviceInfo, nullptr, &device);//创建逻辑设备
+    if (result != VK_SUCCESS) {
+        LOGE("[MyVulkanManager] create device failed! result: %d", result);
+    }
     assert(result == VK_SUCCESS);//检查逻辑设备是否创建成功
 
     // 获取图形队列
     vkGetDeviceQueue(device, queueGraphicsFamilyIndex, 0, &queueGraphics);
     assert(queueGraphics != VK_NULL_HANDLE);
+    LOGI("[MyVulkanManager] create vulkan finished!");
 }
 
 //销毁逻辑设备的方法
@@ -650,75 +706,75 @@ void MyVulkanManager::create_render_pass() {
                                         &imageAcquiredSemaphore);//创建信号量
     assert(result == VK_SUCCESS);//检测信号量是否创建成功
 
-    VkAttachmentDescription attachments[2];//附件描述信息数组
-    attachments[0].format = formats[0];//设置颜色附件的格式
-    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;//设置采样模式
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;//加载时对附件的操作
-    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;//存储时对附件的操作
-    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;//模板加载时对附件的操作
-    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//模板存储时对附件的操作
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;//初始的布局
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;//结束时的最终布局
-    attachments[0].flags = 0;//设置位掩码
-    attachments[1].format = depthFormat;//设置深度附件的格式
-    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;//设置采样模式
-    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;//加载时对附件的操作
-    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//存储时对附件的操作
-    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;//模板加载时对附件的操作
-    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//模板存储时对附件的操作
-    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;    //初始的布局
-    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;//结束时的布局
-    attachments[1].flags = 0;//设置位掩码
-
-    VkAttachmentReference color_reference = {};//颜色附件引用
-    color_reference.attachment = 0;//对应附件描述信息数组下标
-    color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;//设置附件布局
-
-    VkAttachmentReference depth_reference = {};//深度附件引用
-    depth_reference.attachment = 1;//对应附件描述信息数组下标
-    depth_reference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;//设置附件布局
-
-    VkSubpassDescription subpass = {};//构建渲染子通道描述结构体实例
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;//设置管线绑定点
-    subpass.flags = 0;//设置掩码
-    subpass.inputAttachmentCount = 0;//输入附件数量
-    subpass.pInputAttachments = nullptr;//输入附件列表
-    subpass.colorAttachmentCount = 1;//颜色附件数量
-    subpass.pColorAttachments = &color_reference;//颜色附件列表
-    subpass.pResolveAttachments = nullptr;//Resolve附件
-    subpass.pDepthStencilAttachment = &depth_reference;//深度模板附件
-    subpass.preserveAttachmentCount = 0;//preserve附件数量
-    subpass.pPreserveAttachments = nullptr;//preserve附件列表
-
-    VkRenderPassCreateInfo rp_info = {};//构建渲染通道创建信息结构体实例
-    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;//结构体类型
-    rp_info.pNext = nullptr;//自定义数据的指针
-    rp_info.attachmentCount = 2;//附件的数量
-    rp_info.pAttachments = attachments;//附件列表
-    rp_info.subpassCount = 1;//渲染子通道数量
-    rp_info.pSubpasses = &subpass;//渲染子通道列表
-    rp_info.dependencyCount = 0;//子通道依赖数量
-    rp_info.pDependencies = nullptr;//子通道依赖列表
-
-    result = vkCreateRenderPass(device, &rp_info, nullptr, &renderPass);//创建渲染通道
-    assert(result == VK_SUCCESS);
-
-    clear_values[0].color.float32[0] = 0.2f;//帧缓冲清除用R分量值
-    clear_values[0].color.float32[1] = 0.2f;//帧缓冲清除用G分量值
-    clear_values[0].color.float32[2] = 0.2f;//帧缓冲清除用B分量值
-    clear_values[0].color.float32[3] = 0.2f;//帧缓冲清除用A分量值
-    clear_values[1].depthStencil.depth = 1.0f;//帧缓冲清除用深度值
-    clear_values[1].depthStencil.stencil = 0;//帧缓冲清除用模板值
-
-    rp_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;//渲染通道启动信息结构体类型
-    rp_begin.pNext = nullptr;//自定义数据的指针
-    rp_begin.renderPass = renderPass;//指定要启动的渲染通道
-    rp_begin.renderArea.offset.x = 0;//渲染区域起始X坐标
-    rp_begin.renderArea.offset.y = 0;//渲染区域起始Y坐标
-    rp_begin.renderArea.extent.width = screenWidth;//渲染区域宽度
-    rp_begin.renderArea.extent.height = screenHeight;//渲染区域高度
-    rp_begin.clearValueCount = 2;//帧缓冲清除值数量
-    rp_begin.pClearValues = clear_values;//帧缓冲清除值数组
+//    VkAttachmentDescription attachments[2];//附件描述信息数组
+//    attachments[0].format = formats[0];//设置颜色附件的格式
+//    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;//设置采样模式
+//    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;//加载时对附件的操作
+//    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;//存储时对附件的操作
+//    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;//模板加载时对附件的操作
+//    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//模板存储时对附件的操作
+//    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;//初始的布局
+//    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;//结束时的最终布局
+//    attachments[0].flags = 0;//设置位掩码
+//    attachments[1].format = depthFormat;//设置深度附件的格式
+//    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;//设置采样模式
+//    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;//加载时对附件的操作
+//    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//存储时对附件的操作
+//    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;//模板加载时对附件的操作
+//    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;//模板存储时对附件的操作
+//    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;    //初始的布局
+//    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;//结束时的布局
+//    attachments[1].flags = 0;//设置位掩码
+//
+//    VkAttachmentReference color_reference = {};//颜色附件引用
+//    color_reference.attachment = 0;//对应附件描述信息数组下标
+//    color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;//设置附件布局
+//
+//    VkAttachmentReference depth_reference = {};//深度附件引用
+//    depth_reference.attachment = 1;//对应附件描述信息数组下标
+//    depth_reference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;//设置附件布局
+//
+//    VkSubpassDescription subpass = {};//构建渲染子通道描述结构体实例
+//    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;//设置管线绑定点
+//    subpass.flags = 0;//设置掩码
+//    subpass.inputAttachmentCount = 0;//输入附件数量
+//    subpass.pInputAttachments = nullptr;//输入附件列表
+//    subpass.colorAttachmentCount = 1;//颜色附件数量
+//    subpass.pColorAttachments = &color_reference;//颜色附件列表
+//    subpass.pResolveAttachments = nullptr;//Resolve附件
+//    subpass.pDepthStencilAttachment = &depth_reference;//深度模板附件
+//    subpass.preserveAttachmentCount = 0;//preserve附件数量
+//    subpass.pPreserveAttachments = nullptr;//preserve附件列表
+//
+//    VkRenderPassCreateInfo rp_info = {};//构建渲染通道创建信息结构体实例
+//    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;//结构体类型
+//    rp_info.pNext = nullptr;//自定义数据的指针
+//    rp_info.attachmentCount = 2;//附件的数量
+//    rp_info.pAttachments = attachments;//附件列表
+//    rp_info.subpassCount = 1;//渲染子通道数量
+//    rp_info.pSubpasses = &subpass;//渲染子通道列表
+//    rp_info.dependencyCount = 0;//子通道依赖数量
+//    rp_info.pDependencies = nullptr;//子通道依赖列表
+//
+//    result = vkCreateRenderPass(device, &rp_info, nullptr, &renderPass);//创建渲染通道
+//    assert(result == VK_SUCCESS);
+//
+//    clear_values[0].color.float32[0] = 0.2f;//帧缓冲清除用R分量值
+//    clear_values[0].color.float32[1] = 0.2f;//帧缓冲清除用G分量值
+//    clear_values[0].color.float32[2] = 0.2f;//帧缓冲清除用B分量值
+//    clear_values[0].color.float32[3] = 0.2f;//帧缓冲清除用A分量值
+//    clear_values[1].depthStencil.depth = 1.0f;//帧缓冲清除用深度值
+//    clear_values[1].depthStencil.stencil = 0;//帧缓冲清除用模板值
+//
+//    rp_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;//渲染通道启动信息结构体类型
+//    rp_begin.pNext = nullptr;//自定义数据的指针
+//    rp_begin.renderPass = renderPass;//指定要启动的渲染通道
+//    rp_begin.renderArea.offset.x = 0;//渲染区域起始X坐标
+//    rp_begin.renderArea.offset.y = 0;//渲染区域起始Y坐标
+//    rp_begin.renderArea.extent.width = screenWidth;//渲染区域宽度
+//    rp_begin.renderArea.extent.height = screenHeight;//渲染区域高度
+//    rp_begin.clearValueCount = 2;//帧缓冲清除值数量
+//    rp_begin.pClearValues = clear_values;//帧缓冲清除值数组
 }
 
 void MyVulkanManager::destroy_render_pass()//销毁渲染通道相关
@@ -893,17 +949,77 @@ void MyVulkanManager::drawObject() {
         }
 
         // 开始录制命令缓冲
-        rp_begin.framebuffer = framebuffers[currentBuffer];    //为渲染通道设置当前帧缓冲
+//        rp_begin.framebuffer = framebuffers[currentBuffer];    //为渲染通道设置当前帧缓冲
         vkResetCommandBuffer(cmdBuffer, 0);//恢复命令缓冲到初始状态
         result = vkBeginCommandBuffer(cmdBuffer, &cmd_buf_info);//启动命令缓冲
         assert(result == VK_SUCCESS);
+
+        // With dynamic rendering we need to explicitly add layout transitions by using barriers, this set of barriers prepares the color and depth images for output
+        insertImageMemoryBarrier2KHR(
+                cmdBuffer,
+                swapchainImages[currentBuffer],
+                0,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+                );
+        insertImageMemoryBarrier2KHR(
+                cmdBuffer,
+                depthImage,
+                0,
+                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+        );
+        // New structures are used to define the attachments used in dynamic rendering
+        // Color attachment
+        VkRenderingAttachmentInfo colorAttachment{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+        colorAttachment.imageView = swapchainImageViews[currentBuffer];
+        colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.clearValue.color = {0.3f, 0.3f, 0.3f, 1.0f};
+        // Depth/stencil attachment
+        VkRenderingAttachmentInfo depthStencilAttachment {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+        colorAttachment.imageView = depthImageView;
+        colorAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.clearValue.depthStencil = {1.0f, 0};
+
+        VkRenderingInfo renderingInfo {VK_STRUCTURE_TYPE_RENDERING_INFO };
+        renderingInfo.renderArea = {0, 0, screenWidth, screenWidth};
+        renderingInfo.layerCount = 1;
+        renderingInfo.colorAttachmentCount = 1;
+        renderingInfo.pColorAttachments = &colorAttachment;
+        renderingInfo.pDepthAttachment = &depthStencilAttachment;
+        renderingInfo.pStencilAttachment = nullptr;
 
         // 更新Uniform和描述集
         MyVulkanManager::flushUniformBuffer();//将当前帧相关数据送入一致变量缓冲
         MyVulkanManager::flushTexToDesSet();//更新绘制用描述集
 
         // 开始渲染通道
-        vkCmdBeginRenderPass(cmdBuffer, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);//启动渲染通道
+//        vkCmdBeginRenderPass(cmdBuffer, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);//启动渲染通道
+        auto vkCmdBeginRendering =
+                (PFN_vkCmdBeginRendering) vkGetDeviceProcAddr(device, "vkCmdBeginRendering");
+        if (vkCmdBeginRendering) {
+            vkCmdBeginRendering(cmdBuffer, &renderingInfo);
+        } else {
+            // 处理API不可用的情况
+        }
+        // Update dynamic viewport state
+        VkViewport viewport{ 0, 0, (float)screenWidth, (float)screenHeight, 0, 1 };
+        vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+        //Update dynamic scissor state
+        VkRect2D  scissor{ 0, 0, screenWidth, screenHeight };
+        vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
         MatrixState3D::pushMatrix();//保护现场
         MatrixState3D::rotate(yAngle,0,1,0);//绕y轴旋转
@@ -912,7 +1028,25 @@ void MyVulkanManager::drawObject() {
                          &(sqsCL->descSet[TextureManager::getVkDescriptorSetIndex("texture/1.astc")]));
         MatrixState3D::popMatrix();	//恢复现场
 
-        vkCmdEndRenderPass(cmdBuffer);//结束渲染通道
+//        vkCmdEndRenderPass(cmdBuffer);//结束渲染通道
+        auto vkCmdEndRendering =
+                (PFN_vkCmdEndRendering) vkGetDeviceProcAddr(device, "vkCmdEndRendering");
+        if (vkCmdEndRendering) {
+            vkCmdEndRendering(cmdBuffer);
+            insertImageMemoryBarrier2KHR(
+                    cmdBuffer,
+                    swapchainImages[currentBuffer],
+                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                    0,
+                    VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                    { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+                    );
+        } else {
+            // 处理API不可用的情况
+        }
         result = vkEndCommandBuffer(cmdBuffer);//结束命令缓冲
         assert(result == VK_SUCCESS);
 
@@ -1017,7 +1151,7 @@ void MyVulkanManager::destroy_textures(){//销毁纹理的方法
 void MyVulkanManager::initPipeline()//初始化管线的方法
 {
     assert(device != VK_NULL_HANDLE && "逻辑设备未初始化");
-    assert(renderPass != VK_NULL_HANDLE && "渲染通道未初始化");
+//    assert(renderPass != VK_NULL_HANDLE && "渲染通道未初始化");
     sqsCL = new ShaderQueueSuit_Common(&device, renderPass, memoryroperties, deviceConfig);//创建封装了渲染管线相关的对象
 }
 

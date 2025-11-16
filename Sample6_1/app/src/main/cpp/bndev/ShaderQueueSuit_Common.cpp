@@ -357,9 +357,15 @@ void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &re
     ms.alphaToOneEnable = VK_FALSE;//不启用alphaToOne
     ms.minSampleShading = 0.0;//最小采样着色
 
+    VkPipelineRenderingCreateInfoKHR pipelineRenderingCI { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
+    pipelineRenderingCI.colorAttachmentCount = 1;
+    VkFormat colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    pipelineRenderingCI.pColorAttachmentFormats = &colorFormat;
+    pipelineRenderingCI.depthAttachmentFormat = VK_FORMAT_D16_UNORM;
+    pipelineRenderingCI.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+
     VkGraphicsPipelineCreateInfo pipelineInfo;//图形管线创建信息
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.pNext = nullptr;//自定义数据的指针
     pipelineInfo.layout = pipelineLayout;//指定管线布局
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;//基管线句柄
     pipelineInfo.basePipelineIndex = 0;//基管线索引
@@ -375,8 +381,10 @@ void ShaderQueueSuit_Common::create_pipe_line(VkDevice &device, VkRenderPass &re
     pipelineInfo.pDepthStencilState = &ds; //管线的深度模板测试状态信息
     pipelineInfo.stageCount = 2;//管线的着色阶段数量
     pipelineInfo.pStages = shaderStages;//管线的着色阶段列表
-    pipelineInfo.renderPass = renderPass;//指定的渲染通道
-    pipelineInfo.subpass = 0;//设置管线执行对应的渲染子通道
+//    pipelineInfo.renderPass = renderPass;//指定的渲染通道
+    pipelineInfo.renderPass = VK_NULL_HANDLE;//指定的渲染通道
+//    pipelineInfo.subpass = 0;//设置管线执行对应的渲染子通道
+    pipelineInfo.pNext = &pipelineRenderingCI;//自定义数据的指针
 
     VkPipelineCacheCreateInfo pipelineCacheInfo;//管线缓冲创建信息
     pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
