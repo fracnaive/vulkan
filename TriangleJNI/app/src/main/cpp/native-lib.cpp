@@ -5,11 +5,13 @@
 #include <android/asset_manager_jni.h>
 #include <android/native_window_jni.h>
 #include <thread>
+#include <vulkan/vulkan.h>
 
 // 全局状态变量
 static ANativeWindow* gWindow = nullptr;
 static AAssetManager* gAssetManager = nullptr;
-static Triangle* triangle = nullptr;
+static std::unique_ptr<Triangle> triangle = nullptr;
+static std::unique_ptr<std::thread> renderThread;
 
 extern "C" {
 JNIEXPORT jboolean JNICALL
@@ -149,12 +151,12 @@ Java_com_nomk_trianglejni_MainActivity_initVulkan(JNIEnv *env, jobject thiz, job
     // 获取 NativeWindow
     gWindow = ANativeWindow_fromSurface(env, surface);
     vks::android::setWindow(gWindow);
-    triangle = new Triangle();
+    triangle = std::make_unique<Triangle>();
     if (triangle->initVulkan()) {
         triangle->prepare();
-        std::thread([=](){
-            triangle->renderLoop();
-        }).detach();
+        renderThread = std::make_unique<std::thread>([=](){
+           triangle->renderLoop();
+        });
     }
 }
 
@@ -164,10 +166,20 @@ Java_com_nomk_trianglejni_MainActivity_setScreenDensity(JNIEnv *env, jobject thi
 }
 
 JNIEXPORT void JNICALL
-Java_com_nomk_trianglejni_MainActivity_cleanupSwapChain(JNIEnv *env, jobject thiz) {
-    triangle->cleanupSwapChain();
-    delete triangle;
+Java_com_nomk_trianglejni_MainActivity_stopRenderLoop(JNIEnv *env, jobject thiz) {
+    if (triangle != nullptr) {
+        triangle->stopRenderLoop();
+        std::thread([=](){
+            if (renderThread && renderThread->joinable()) {
+                LOGI("等待渲染线程退出");
+                renderThread->join();
+                LOGI("渲染线程已退出");
+            }
+            // 等待GPU命令执行结束
+            triangle->waitDevice();
+            // (主动调用析构)
+            triangle.reset();
+        }).detach();
+    }
 }
-
-
 }

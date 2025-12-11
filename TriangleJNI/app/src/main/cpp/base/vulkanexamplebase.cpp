@@ -766,14 +766,17 @@ void VulkanExampleBase::prepareFrame(bool waitForFence)
 			windowResize();
 		}
 		return;
-	}
-	else {
+	} else {
 		VK_CHECK_RESULT(result);
 	}
 }
 
 void VulkanExampleBase::submitFrame(bool skipQueueSubmit)
 {
+    if (destroy) {
+        LOGE("[submitFrame] surface has been destroyed!");
+        return;
+    }
 	if (!skipQueueSubmit) {
 		const VkPipelineStageFlags waitPipelineStage{ VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 		VkSubmitInfo submitInfo{
@@ -981,6 +984,7 @@ VulkanExampleBase::~VulkanExampleBase()
 	}
 	for (auto& frameBuffer : frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);
+        frameBuffer = VK_NULL_HANDLE;
 	}
 	for (auto& shaderModule : shaderModules) {
 		vkDestroyShaderModule(device, shaderModule, nullptr);
@@ -1006,6 +1010,11 @@ VulkanExampleBase::~VulkanExampleBase()
 	if (settings.validation) {
 		vks::debug::freeDebugCallback(instance);
 	}
+    auto destroyFunc = (PFN_vkDestroyDebugUtilsMessengerEXT)
+            vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (destroyFunc != nullptr) {
+        destroyFunc(instance, debugMessenger, nullptr);
+    }
 	vkDestroyInstance(instance, nullptr);
 #if defined(_DIRECT2DISPLAY)
 
@@ -3085,6 +3094,10 @@ void VulkanExampleBase::setupFrameBuffer()
 			.height = height,
 			.layers = 1
 		};
+        if (destroy) {
+            LOGI("setupFrameBuffer destroy");
+            return;
+        }
 		VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
 	}
 }
@@ -3180,11 +3193,13 @@ void VulkanExampleBase::windowResize()
 
 	// Recreate the frame buffers
 	vkDestroyImageView(device, depthStencil.view, nullptr);
+    depthStencil.view = VK_NULL_HANDLE;
 	vkDestroyImage(device, depthStencil.image, nullptr);
 	vkFreeMemory(device, depthStencil.memory, nullptr);
 	setupDepthStencil();
 	for (auto& frameBuffer : frameBuffers) {
 		vkDestroyFramebuffer(device, frameBuffer, nullptr);
+        frameBuffer = VK_NULL_HANDLE;
 	}
 	setupFrameBuffer();
 
@@ -3274,7 +3289,7 @@ void VulkanExampleBase::createSurface()
 
 void VulkanExampleBase::createSwapChain()
 {
-	swapChain.create(width, height, settings.vsync, settings.fullscreen);
+	swapChain.create(width, height, destroy, settings.vsync, settings.fullscreen);
 }
 
 void VulkanExampleBase::OnUpdateUIOverlay(vks::UIOverlay *overlay) {}

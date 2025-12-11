@@ -194,7 +194,7 @@ void VulkanSwapChain::setContext(VkInstance instance, VkPhysicalDevice physicalD
 	this->device = device;
 }
 
-void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool fullscreen)
+void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool& destroy, bool vsync, bool fullscreen)
 {
 	assert(physicalDevice);
 	assert(device);
@@ -309,40 +309,49 @@ void VulkanSwapChain::create(uint32_t& width, uint32_t& height, bool vsync, bool
 	if (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
 		swapchainCI.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 	}
-	VK_CHECK_RESULT(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapChain));
+    if (!destroy) {
+        VkResult result = vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapChain);
+        if (result != VK_SUCCESS) {
+            LOGE("createSwapChain, result = %d", result);
+            swapChain = VK_NULL_HANDLE;
+        }
+        // If an existing swap chain is re-created, destroy the old swap chain and the ressources owned by the application (image views, images are owned by the swap chain)
+        if (oldSwapchain != VK_NULL_HANDLE) {
+            for (auto i = 0; i < images.size(); i++) {
+                vkDestroyImageView(device, imageViews[i], nullptr);
+                imageViews[i] = VK_NULL_HANDLE;
+            }
+            vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
+            oldSwapchain = VK_NULL_HANDLE;
+        }
+    }
+    if (!destroy) {
+        // Get the (new) swap chain images
+        VK_CHECK_RESULT(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr));
+        images.resize(imageCount);
+        VK_CHECK_RESULT(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, images.data()));
 
-	// If an existing swap chain is re-created, destroy the old swap chain and the ressources owned by the application (image views, images are owned by the swap chain)
-	if (oldSwapchain != VK_NULL_HANDLE) { 
-		for (auto i = 0; i < images.size(); i++) {
-			vkDestroyImageView(device, imageViews[i], nullptr);
-		}
-		vkDestroySwapchainKHR(device, oldSwapchain, nullptr);
-	}
-	// Get the (new) swap chain images
-	VK_CHECK_RESULT(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr));
-	images.resize(imageCount);
-	VK_CHECK_RESULT(vkGetSwapchainImagesKHR(device, swapChain, &imageCount, images.data()));
-
-	// Get the swap chain buffers containing the image and imageview
-	imageViews.resize(imageCount);
-	for (auto i = 0; i < images.size(); i++)
-	{
-		VkImageViewCreateInfo colorAttachmentView{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = images[i],
-			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.format = colorFormat,
-			.components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A },
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-		};
-		VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &imageViews[i]));
-	}
+        // Get the swap chain buffers containing the image and imageview
+        imageViews.resize(imageCount);
+        for (auto i = 0; i < images.size(); i++)
+        {
+            VkImageViewCreateInfo colorAttachmentView{
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                    .image = images[i],
+                    .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                    .format = colorFormat,
+                    .components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A },
+                    .subresourceRange = {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1
+                    },
+            };
+            VK_CHECK_RESULT(vkCreateImageView(device, &colorAttachmentView, nullptr, &imageViews[i]));
+        }
+    }
 }
 
 VkResult VulkanSwapChain::acquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t& imageIndex)
@@ -356,6 +365,7 @@ void VulkanSwapChain::cleanup()
 	if (swapChain != VK_NULL_HANDLE) {
 		for (auto i = 0; i < images.size(); i++) {
 			vkDestroyImageView(device, imageViews[i], nullptr);
+            imageViews[i] = VK_NULL_HANDLE;
 		}
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 	}

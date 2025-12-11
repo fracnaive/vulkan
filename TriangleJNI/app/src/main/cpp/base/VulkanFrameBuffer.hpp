@@ -118,11 +118,13 @@ namespace vks
 			{
 				vkDestroyImage(vulkanDevice->logicalDevice, attachment.image, nullptr);
 				vkDestroyImageView(vulkanDevice->logicalDevice, attachment.view, nullptr);
+                attachment.view = VK_NULL_HANDLE;
 				vkFreeMemory(vulkanDevice->logicalDevice, attachment.memory, nullptr);
 			}
 			vkDestroySampler(vulkanDevice->logicalDevice, sampler, nullptr);
 			vkDestroyRenderPass(vulkanDevice->logicalDevice, renderPass, nullptr);
 			vkDestroyFramebuffer(vulkanDevice->logicalDevice, framebuffer, nullptr);
+            framebuffer = VK_NULL_HANDLE;
 		}
 
 		/**

@@ -82,7 +82,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
 
     public native void setScreenDensity(float density);
 
-    public native void cleanupSwapChain();
+    public native void stopRenderLoop();
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -110,6 +110,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
         Log.i(TAG, "surfaceDestroyed");
-        cleanupSwapChain();
+        stopRenderLoop();
     }
 }
