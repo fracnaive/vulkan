@@ -802,7 +802,7 @@ void VulkanExampleBase::submitFrame(bool skipQueueSubmit)
 	};
 	VkResult result = vkQueuePresentKHR(queue, &presentInfo);
 	// Recreate the swapchain if it's no longer compatible with the surface (OUT_OF_DATE) or no longer optimal for presentation (SUBOPTIMAL)
-	if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
+	if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR) || (result == VK_SUCCESS)) {
 		windowResize();
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 			return;
@@ -3269,7 +3269,11 @@ void VulkanExampleBase::createSurface()
 #if defined(_WIN32)
 	swapChain.initSurface(windowInstance, window);
 #elif defined(VK_USE_PLATFORM_ANDROID_KHR)
-	swapChain.initSurface(window);
+    if (destroy) {
+        LOGI("[createSurface] destroyed!");
+        return;
+    }
+    swapChain.initSurface(window);
 #elif (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
 	swapChain.initSurface(view);
 #elif defined(VK_USE_PLATFORM_METAL_EXT)

@@ -169,17 +169,15 @@ JNIEXPORT void JNICALL
 Java_com_nomk_trianglejni_MainActivity_stopRenderLoop(JNIEnv *env, jobject thiz) {
     if (triangle != nullptr) {
         triangle->stopRenderLoop();
-        std::thread([=](){
-            if (renderThread && renderThread->joinable()) {
-                LOGI("等待渲染线程退出");
-                renderThread->join();
-                LOGI("渲染线程已退出");
-            }
-            // 等待GPU命令执行结束
-            triangle->waitDevice();
-            // (主动调用析构)
-            triangle.reset();
-        }).detach();
+        if (renderThread && renderThread->joinable()) {
+            LOGI("等待渲染线程退出");
+            renderThread->join();
+            LOGI("渲染线程已退出");
+        }
+        // 等待GPU命令执行结束
+        triangle->waitDevice();
+        // (主动调用析构)
+        triangle.reset();
     }
 }
 }
