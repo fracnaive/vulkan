@@ -182,7 +182,8 @@ namespace tinygltf {
 
 #ifdef __ANDROID__
 #ifdef TINYGLTF_ANDROID_LOAD_FROM_ASSETS
-AAssetManager *asset_manager = nullptr;
+// inline 确保全局变量仅在链接时生成一份
+inline AAssetManager* asset_manager = nullptr;
 #endif
 #endif
 

@@ -1,6 +1,6 @@
 #include <jni.h>
 #include <string>
-#include "Triangle.h"
+#include "TextureCubeMap.h"
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <android/native_window_jni.h>
@@ -10,34 +10,34 @@
 // 全局状态变量
 static ANativeWindow* gWindow = nullptr;
 static AAssetManager* gAssetManager = nullptr;
-static std::unique_ptr<Triangle> triangle = nullptr;
+static std::unique_ptr<VulkanExample> vulkanExample = nullptr;
 static std::unique_ptr<std::thread> renderThread;
 
 extern "C" {
 JNIEXPORT jboolean JNICALL
 Java_com_nomk_trianglejni_MainActivity_handleInputEvent(JNIEnv *env, jobject thiz,
                                                        jint action, jint posX, jint posY, jint pointerCount, jlong eTime, jlong dTime) {
-    if (triangle == nullptr) {
+    if (vulkanExample == nullptr) {
         return 0;
     }
     switch (action) {
         case AMOTION_EVENT_ACTION_UP: {
-            triangle->lastTapTime = eTime;
-            triangle->touchPos.x = posX;
-            triangle->touchPos.y = posY;
-            triangle->touchTimer = 0.0;
-            triangle->touchDown = false;
-            triangle->camera.keys.up = false;
+            vulkanExample->lastTapTime = eTime;
+            vulkanExample->touchPos.x = posX;
+            vulkanExample->touchPos.y = posY;
+            vulkanExample->touchTimer = 0.0;
+            vulkanExample->touchDown = false;
+            vulkanExample->camera.keys.up = false;
 
             // Detect single tap
             int64_t eventTime = eTime;
             int64_t downTime = dTime;
             if (eventTime - downTime <= vks::android::TAP_TIMEOUT) {
                 float deadZone = (160.f / vks::android::screenDensity) * vks::android::TAP_SLOP * vks::android::TAP_SLOP;
-                float x = posX - triangle->touchPos.x;
-                float y = posY - triangle->touchPos.y;
+                float x = posX - vulkanExample->touchPos.x;
+                float y = posY - vulkanExample->touchPos.y;
                 if ((x * x + y * y) < deadZone) {
-                    triangle->mouseState.buttons.left = true;
+                    vulkanExample->mouseState.buttons.left = true;
                 }
             };
 
@@ -47,42 +47,42 @@ Java_com_nomk_trianglejni_MainActivity_handleInputEvent(JNIEnv *env, jobject thi
         case AMOTION_EVENT_ACTION_DOWN: {
             // Detect double tap
             int64_t eventTime = eTime;
-            if (eventTime - triangle->lastTapTime <= vks::android::DOUBLE_TAP_TIMEOUT) {
+            if (eventTime - vulkanExample->lastTapTime <= vks::android::DOUBLE_TAP_TIMEOUT) {
                 float deadZone = (160.f / vks::android::screenDensity) * vks::android::DOUBLE_TAP_SLOP * vks::android::DOUBLE_TAP_SLOP;
-                float x = posX - triangle->touchPos.x;
-                float y = posY - triangle->touchPos.y;
+                float x = posX - vulkanExample->touchPos.x;
+                float y = posY - vulkanExample->touchPos.y;
                 if ((x * x + y * y) < deadZone) {
-                    triangle->keyPressed(TOUCH_DOUBLE_TAP);
-                    triangle->touchDown = false;
+                    vulkanExample->keyPressed(TOUCH_DOUBLE_TAP);
+                    vulkanExample->touchDown = false;
                 }
             }
             else {
-                triangle->touchDown = true;
+                vulkanExample->touchDown = true;
             }
-            triangle->touchPos.x = posX;
-            triangle->touchPos.y = posY;
-            triangle->mouseState.position.x = posX;
-            triangle->mouseState.position.y = posY;
+            vulkanExample->touchPos.x = posX;
+            vulkanExample->touchPos.y = posY;
+            vulkanExample->mouseState.position.x = posX;
+            vulkanExample->mouseState.position.y = posY;
             break;
         }
         case AMOTION_EVENT_ACTION_MOVE: {
             bool handled = false;
-            if (triangle->settings.overlay) {
+            if (vulkanExample->settings.overlay) {
                 ImGuiIO& io = ImGui::GetIO();
-                handled = io.WantCaptureMouse && triangle->ui.visible;
+                handled = io.WantCaptureMouse && vulkanExample->ui.visible;
             }
             if (!handled) {
                 int32_t eventX = posX;
                 int32_t eventY = posY;
 
-                float deltaX = (float)(triangle->touchPos.y - eventY) * triangle->camera.rotationSpeed * 0.5f;
-                float deltaY = (float)(triangle->touchPos.x - eventX) * triangle->camera.rotationSpeed * 0.5f;
+                float deltaX = (float)(vulkanExample->touchPos.y - eventY) * vulkanExample->camera.rotationSpeed * 0.5f;
+                float deltaY = (float)(vulkanExample->touchPos.x - eventX) * vulkanExample->camera.rotationSpeed * 0.5f;
 
-                triangle->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
-                triangle->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
+                vulkanExample->camera.rotate(glm::vec3(deltaX, 0.0f, 0.0f));
+                vulkanExample->camera.rotate(glm::vec3(0.0f, -deltaY, 0.0f));
 
-                triangle->touchPos.x = eventX;
-                triangle->touchPos.y = eventY;
+                vulkanExample->touchPos.x = eventX;
+                vulkanExample->touchPos.y = eventY;
             }
             break;
         }
@@ -151,11 +151,11 @@ Java_com_nomk_trianglejni_MainActivity_initVulkan(JNIEnv *env, jobject thiz, job
     // 获取 NativeWindow
     gWindow = ANativeWindow_fromSurface(env, surface);
     vks::android::setWindow(gWindow);
-    triangle = std::make_unique<Triangle>();
-    if (triangle->initVulkan()) {
-        triangle->prepare();
+    vulkanExample = std::make_unique<VulkanExample>();
+    if (vulkanExample->initVulkan()) {
+        vulkanExample->prepare();
         renderThread = std::make_unique<std::thread>([=](){
-           triangle->renderLoop();
+           vulkanExample->renderLoop();
         });
     }
 }
@@ -167,17 +167,17 @@ Java_com_nomk_trianglejni_MainActivity_setScreenDensity(JNIEnv *env, jobject thi
 
 JNIEXPORT void JNICALL
 Java_com_nomk_trianglejni_MainActivity_stopRenderLoop(JNIEnv *env, jobject thiz) {
-    if (triangle != nullptr) {
-        triangle->stopRenderLoop();
+    if (vulkanExample != nullptr) {
+        vulkanExample->stopRenderLoop();
         if (renderThread && renderThread->joinable()) {
             LOGI("等待渲染线程退出");
             renderThread->join();
             LOGI("渲染线程已退出");
         }
         // 等待GPU命令执行结束
-        triangle->waitDevice();
+        vulkanExample->waitDevice();
         // (主动调用析构)
-        triangle.reset();
+        vulkanExample.reset();
     }
 }
 }

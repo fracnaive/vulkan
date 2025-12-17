@@ -42,7 +42,7 @@
 // Increasing this number may improve performance but will also introduce additional latency
 constexpr auto MAX_CONCURRENT_FRAMES = 2;
 
-class Triangle : public VulkanExampleBase
+class VulkanExample : public VulkanExampleBase
 {
 public:
     // Vertex layout used in this example
@@ -116,7 +116,7 @@ public:
     std::vector<VkSemaphore> presentCompleteSemaphores{};
     std::vector<VkSemaphore> renderCompleteSemaphores{};
 
-    Triangle() : VulkanExampleBase()
+    VulkanExample() : VulkanExampleBase()
     {
         title = "Basic indexed triangle";
         // To keep things simple, we don't use the UI overlay from the framework
@@ -129,7 +129,7 @@ public:
         // Values not set here are initialized in the base class constructor
     }
 
-    ~Triangle() override
+    ~VulkanExample() override
     {
         // Clean up used Vulkan resources
         // Note: Inherited destructor cleans up resources stored in base class
