@@ -1,6 +1,6 @@
 #include <jni.h>
 #include <string>
-#include "TextureCubeMap.h"
+#include "GLTFLoading.h"
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <android/native_window_jni.h>
